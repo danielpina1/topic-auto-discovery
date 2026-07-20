@@ -6,7 +6,7 @@
 
 ## Purpose
 
-A personal Claude Code skill (`/topic-discovery`) that runs bottom-up (grounded-theory) auto-discovery of a user-defined concept ("domain") — e.g. contact reasons, frictions, promise types — over call-center transcriptions stored in BigQuery. It generalizes the proven ELAL discovery pipeline (Sonnet map → Opus consolidate → cross-batch merge) into a reusable, client-agnostic skill, replacing the one-shot cross-batch merge with a **persistent collector memory** (`codebook.json`) that incrementally absorbs batch aggregates, collapses overlapping categories into meaningful ones, and tracks saturation across runs.
+A personal Claude Code skill (`/topic-auto-discovery`, repo: `github.com/danielpina1/topic-auto-discovery`) that runs bottom-up (grounded-theory) auto-discovery of a user-defined concept ("domain") — e.g. contact reasons, frictions, promise types — over call-center transcriptions stored in BigQuery. It generalizes the proven ELAL discovery pipeline (Sonnet map → Opus consolidate → cross-batch merge) into a reusable, client-agnostic skill, replacing the one-shot cross-batch merge with a **persistent collector memory** (`codebook.json`) that incrementally absorbs batch aggregates, collapses overlapping categories into meaningful ones, and tracks saturation across runs.
 
 ## Decisions (locked with user)
 
@@ -36,20 +36,26 @@ transcriptions (BQ table)
                      serial merge into codebook.json (persistent memory)
                                              │
                                              ▼
+                          reporter agent (report node)
+              reports/DISCOVERY_REPORT.md + UMAP visual assets
+                                             │
+                                             ▼
                           RUN_REPORT.md + CODEBOOK.md + git commit
 ```
 
-### Skill package — `~/.claude/skills/topic-discovery/`
+### Skill package — `~/.claude/skills/topic-auto-discovery/`
 
 ```
-topic-discovery/
+topic-auto-discovery/
 ├── SKILL.md                      # process: intake → ingest → engine → collect → report
+├── README.md                     # repo-facing: features + how to use the skill
 ├── templates/
 │   └── domain.md                 # domain definition template the intake fills in
 ├── prompts/
 │   ├── map_extraction.md         # sonnet-5 per-chunk open-coding (parametrized by domain.md)
 │   ├── aggregate_group.md        # opus-4.8 per-group consolidation
-│   └── collector_merge.md        # fable-5 memory-merge + collapse rules
+│   ├── collector_merge.md        # fable-5 memory-merge + collapse rules
+│   └── discovery_report.md       # reporter agent: full domain report w/ UMAP visuals
 ├── scripts/
 │   ├── pull_and_shard.py         # bq pull → deterministic sample → chunk files
 │   ├── validate_extractions.py   # per-chunk completeness check
@@ -59,7 +65,7 @@ topic-discovery/
 └── docs/superpowers/specs/       # this spec
 ```
 
-Scripts use `uv` for dependency management (sentence-transformers, umap-learn, hdbscan, numpy, plotly) so nothing pollutes system Python.
+Scripts use `uv` for dependency management (sentence-transformers, umap-learn, hdbscan, numpy, plotly, matplotlib) so nothing pollutes system Python.
 
 ### Per-client workspace (created where the skill is invoked)
 
@@ -72,8 +78,11 @@ Scripts use `uv` for dependency management (sentence-transformers, umap-learn, h
     ├── chunks/chunk_NNNN.jsonl
     ├── extractions/chunk_NNNN.out.jsonl
     ├── groups/group_NN.json
-    ├── umap/{embeddings.npy, clusters.json, scatter.html}
+    ├── umap/{embeddings.npy, clusters.json, scatter.html, *.png}
     └── RUN_REPORT.md
+<workspace>/reports/
+    ├── DISCOVERY_REPORT.md       # cumulative full-domain report (reporter node)
+    └── assets/*.png              # UMAP visuals embedded in the report
 ```
 
 Invoking the skill in a workspace that already has `domain.md` + `codebook.json` skips intake and starts a new run feeding the same memory.
@@ -129,9 +138,21 @@ Agreements/mismatches are reported in `RUN_REPORT.md`. The taxonomy remains LLM-
 
 **Safety:** `codebook.json` backed up before collection; schema validated after every merge.
 
+## Report node (reporter agent)
+
+A dedicated node that runs after collection completes, added at user request (2026-07-20). A reporter subagent (session-model, prompt template `discovery_report.md`) reads `domain.md`, `codebook.json`, the run's `umap/` outputs, and the `runs[]` ledger, and writes the **cumulative** workspace-level `reports/DISCOVERY_REPORT.md` (+ `reports/assets/*.png`):
+
+- **Methodology & assumptions** — the domain definition verbatim; every operating assumption made explicit: sampling design (table, window, `FARM_FINGERPRINT`, N), scope gates and what they exclude, evidence rule, unit of analysis, model roster per node, taxonomy caps, known biases/limitations.
+- **Taxonomy deep-dive** — per category: id, label, full definition and boundary description (what's in, what's out, edge cases), status and lifecycle (first/last seen), absorbed aliases, exemplar quotes with call ids, per-run counts and trend.
+- **UMAP visualizations embedded** — overall 2D scatter colored by final category (static PNG produced by `embed_cluster.py --render`, alongside the interactive HTML), per-family close-up panels, and a cluster-vs-category agreement matrix with commentary on merges/splits/missed-topic signals.
+- **Cross-run picture** — saturation history chart-table, category arrival timeline, open questions.
+
+Because it reads the codebook (cumulative memory), the report always reflects the full discovery state, not just the latest run; it is regenerated (overwritten) each run and versioned by the per-run git commit.
+
 ## Outputs per run
 
-- `RUN_REPORT.md` — new/merged/confirmed categories, distributions, UMAP-vs-taxonomy agreement table, saturation verdict, segregated share, notable evidence.
+- `RUN_REPORT.md` — this run's delta: new/merged/confirmed categories, distributions, UMAP-vs-taxonomy agreement table, saturation verdict, segregated share, notable evidence.
+- `reports/DISCOVERY_REPORT.md` — cumulative full-domain report with embedded UMAP visuals (report node, above).
 - `umap/scatter.html` — interactive projection.
 - Updated `CODEBOOK.md` + `codebook.json`.
 - Workspace is a git repo (skill offers `git init` on first run); one commit per run → codebook diff history.
