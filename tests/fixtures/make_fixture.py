@@ -71,7 +71,7 @@ def build(root: Path, n_calls=40, chunk_size=20):
                      "last_seen_run": "fixture",
                      "provenance": [{"run_id": "fixture", "group": 0,
                                      "raw_cluster": "digital_failure"}]}]}
-    (root.parent / "codebook.json").write_text(json.dumps(codebook, indent=2))
+    (root.parent.parent / "codebook.json").write_text(json.dumps(codebook, indent=2))
     return manifest
 
 
