@@ -30,7 +30,8 @@ const AGG_SCHEMA = {
   required: ['group', 'n_clusters', 'n_detections', 'path'],
 }
 
-const { runDir, mapPrompt, aggPrompt, groups } = args
+const cfg = typeof args === 'string' ? JSON.parse(args) : args
+const { runDir, mapPrompt, aggPrompt, groups } = cfg
 
 const outName = (f) => f.replace('.jsonl', '.out.jsonl')
 
