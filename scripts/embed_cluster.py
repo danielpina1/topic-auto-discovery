@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "numpy>=1.26",
+#   "numba>=0.60",
 #   "umap-learn>=0.5.5",
 #   "hdbscan>=0.8.36",
 #   "sentence-transformers>=3.0",
