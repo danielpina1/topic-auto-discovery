@@ -8,6 +8,7 @@
 #   "hdbscan>=0.8.36",
 #   "sentence-transformers>=3.0",
 #   "plotly>=5.20",
+#   "pandas>=2.0",
 #   "matplotlib>=3.8",
 # ]
 # ///
